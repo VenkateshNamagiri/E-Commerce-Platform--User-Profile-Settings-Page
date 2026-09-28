@@ -20,7 +20,7 @@ api.interceptors.request.use(config => {
 })
 
 // ------------------------------------------------------------------
-// Response interceptor - if a call comes back 401 (expired access token),
+// Response interceptor - if a call comes back 401 with code token_expired,
 // silently use the refresh token to get a new one and retry the original
 // request once. If the refresh itself fails, the user is logged out.
 // ------------------------------------------------------------------
@@ -29,7 +29,14 @@ api.interceptors.response.use(
   async error => {
     const original = error.config
 
-    if (error.response?.status === 401 && !original._retry) {
+    // Only an EXPIRED token should trigger a refresh. Other 401s are real
+    // answers the page needs to see (wrong password on login, wrong current
+    // password on the profile page) - refreshing/redirecting there would
+    // hide the error message.
+    const tokenExpired =
+      error.response?.status === 401 && error.response?.data?.code === 'token_expired'
+
+    if (tokenExpired && !original._retry) {
       original._retry = true
       try {
         const refreshToken = localStorage.getItem('refresh_token')

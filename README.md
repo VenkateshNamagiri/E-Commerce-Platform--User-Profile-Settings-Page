@@ -80,6 +80,87 @@ Runs at **http://localhost:5173** and talks to the API at `localhost:5000`
    manage coupons at `/admin/coupons`, and view the sales dashboard at
    `/admin`.
 
+## New features (v8 - user profile & settings)
+
+Needs a one-line database migration - run it BEFORE starting the new backend:
+
+```powershell
+Get-Content backend/migrate_v4.sql | mysql -u root -p ecommerce
+```
+
+- **`/profile` page** (logged-in users only) with three sections: profile
+  picture, edit name/email, change password. Linked from the Navbar
+  ("My Profile", and by clicking your avatar/name).
+- **Profile picture** - pick a file, see an instant preview, click Upload.
+  The Navbar avatar changes immediately. No photo yet? A circle with the
+  user's initials is shown. Uploading a new photo deletes the old file.
+- **Backend** - `GET /api/me` now returns the full profile (email,
+  avatar_url, created_at) from the database; new `PUT /api/me` (name/email,
+  409 if the email is taken), `PUT /api/me/password` (verifies the current
+  password first) and `PUT /api/me/avatar` (upload + save in one step).
+- **`updateUser()` in AuthContext** - merges changed fields into the shared
+  user, so the Navbar reflects edits instantly without a refresh.
+- **New helpers** - `useForm` (values/validation/errors/submit),
+  `useToast` (success/error notifications) and an `Avatar` component. The
+  form, toast and avatar styles all use the theme variables, so the page
+  works in light, dark and sepia.
+- **Bug fix in `api.js`** - the interceptor used to treat *every* 401 as an
+  expired token. It now refreshes only when the server says
+  `token_expired`. Without this, a wrong password on the login page reloaded
+  the page and hid the error, and a wrong *current* password on the profile
+  page would have triggered a needless token refresh. `app.py` and `api.js`
+  must be updated together for this to work.
+- Emails are now saved lowercase when edited (as they already are at
+  register), because login looks emails up in lowercase.
+
+## New features (v7 - theme system upgrades)
+
+- **Smooth transitions** - a global rule now animates
+  `background-color`/`color`/`border-color` over 0.3s on every element
+  when the theme switches, instead of colors snapping instantly. Elements
+  with their own transition (like buttons) keep their existing feel for
+  hover/press - only the color-related properties are affected.
+- **Third theme: Sepia** - a warm, low-glare reading theme
+  (`:root[data-theme='sepia']` in `index.css`), with its own tinted badge/
+  status colors tuned for a cream background.
+- **Live OS theme following** - `ThemeContext` now subscribes to
+  `window.matchMedia('(prefers-color-scheme: dark)')`'s `change` event,
+  so if the visitor flips their OS between light/dark, the app follows in
+  real time - but only until they've made an explicit choice of their own
+  (clicking the toggle, including picking sepia). Once they've picked a
+  theme themselves, it sticks even if their OS theme changes afterward.
+- The navbar toggle now **cycles** light → dark → sepia → light, showing
+  the icon of the theme you'll switch *to* next.
+
+## New features (v6 - dark mode & theme system)
+
+Pure frontend change - no backend or database changes.
+
+- New `ThemeContext` (`src/context/ThemeContext.jsx`) - tracks `'light'`
+  or `'dark'`, checks `localStorage` first, then falls back to the
+  browser's `prefers-color-scheme` on first visit. Every change is
+  saved back to `localStorage` and applied as `data-theme` on
+  `<html>`.
+- `main.jsx` now wraps everything in `<ThemeProvider>`.
+- A 🌙/☀️ toggle button sits in the Navbar (`useTheme()`).
+- `index.css` was restructured around CSS custom properties: brand
+  colors (`--primary`, `--accent`, `--gold`, etc.) stay constant across
+  themes, while surface/text/border tokens
+  (`--bg-primary`, `--text-primary`, `--card-bg`, `--border-color`, and
+  several tinted badge/status colors) switch between a light and a dark
+  value set under `:root[data-theme='light']` / `:root[data-theme='dark']`.
+  A bare `:root` fallback (= light values) prevents a flash of
+  unstyled colors before React mounts.
+- Every page listed in the task (Navbar, product cards, product detail,
+  cart, checkout, orders, admin pages, login/register) now reads its
+  colors from these variables instead of hardcoded hex values, so
+  toggling the theme updates the whole app instantly with no
+  per-component logic.
+- A couple of things were deliberately left theme-independent: the
+  colorful navbar gradient, dashboard stat-card gradients, and small
+  overlay buttons drawn on top of product images - these already have
+  good contrast in both themes and don't need to change.
+
 ## New features (v5 - JWT authentication)
 
 Auth is now stateless JWT instead of Flask sessions - this is a bigger

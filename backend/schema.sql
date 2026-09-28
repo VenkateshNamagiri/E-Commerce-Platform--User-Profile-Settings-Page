@@ -1,6 +1,7 @@
 CREATE DATABASE IF NOT EXISTS ecommerce;
 USE ecommerce;
 
+DROP TABLE IF EXISTS product_images;
 DROP TABLE IF EXISTS ratings;
 DROP TABLE IF EXISTS wishlist;
 DROP TABLE IF EXISTS coupons;
@@ -16,6 +17,7 @@ CREATE TABLE users (
     email        VARCHAR(100) NOT NULL UNIQUE,
     password     VARCHAR(255) NOT NULL,
     role         ENUM('admin','customer') DEFAULT 'customer',
+    avatar_url   VARCHAR(255) DEFAULT NULL,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -34,6 +36,14 @@ CREATE TABLE products (
     image_url      VARCHAR(255),
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (category_id) REFERENCES categories(id)
+);
+
+CREATE TABLE product_images (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    product_id  INT NOT NULL,
+    image_url   VARCHAR(255) NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
 CREATE TABLE orders (

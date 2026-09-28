@@ -3,6 +3,10 @@ import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import { useWishlist } from '../context/WishlistContext'
 import { useTheme } from '../context/ThemeContext'
+import Avatar from './Avatar'
+
+const NEXT_THEME = { light: 'dark', dark: 'sepia', sepia: 'light' }
+const THEME_ICON = { light: '🌙', dark: '📜', sepia: '☀️' } // icon shown = the theme you'll switch TO
 
 export default function Navbar() {
   const { user, isAdmin, logout } = useAuth()
@@ -24,6 +28,7 @@ export default function Navbar() {
         <Link to="/">Home</Link>
 
         {user && !isAdmin && <Link to="/orders">My Orders</Link>}
+        {user && <Link to="/profile">My Profile</Link>}
         {user && !isAdmin && (
           <Link to="/wishlist" className="navbar-wishlist">
             Wishlist
@@ -48,15 +53,18 @@ export default function Navbar() {
         <button
           className="theme-toggle-btn"
           onClick={toggleTheme}
-          aria-label="Toggle dark mode"
-          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          aria-label="Cycle theme"
+          title={`Switch to ${NEXT_THEME[theme]} mode`}
         >
-          {theme === 'light' ? '🌙' : '☀️'}
+          {THEME_ICON[theme]}
         </button>
 
         {user ? (
           <div className="navbar-user">
-            <span>Hi, {user.name}</span>
+            <Link to="/profile" className="navbar-profile" title="My Profile">
+              <Avatar name={user.name} avatarUrl={user.avatar_url} size={32} />
+              <span>{user.name}</span>
+            </Link>
             <button className="btn btn-link" onClick={handleLogout}>Logout</button>
           </div>
         ) : (

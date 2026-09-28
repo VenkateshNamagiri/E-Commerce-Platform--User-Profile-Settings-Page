@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import api from '../api'
 
 const AuthContext = createContext()
@@ -48,10 +48,18 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  // Merge changed fields (name, email, avatar_url...) into the logged-in user.
+  // Anything reading `user` from this context - the Navbar especially - re-renders
+  // immediately, so profile edits show up without a page refresh.
+  // useCallback keeps the function's identity stable so it's safe in effect deps.
+  const updateUser = useCallback(changes => {
+    setUser(prev => (prev ? { ...prev, ...changes } : prev))
+  }, [])
+
   const isAdmin = user?.role === 'admin'
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, isAdmin }}>
       {children}
     </AuthContext.Provider>
   )

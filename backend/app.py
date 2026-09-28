@@ -8,6 +8,7 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, create_refresh_token,
     jwt_required, get_jwt_identity, get_jwt,
 )
+import mysql.connector
 from werkzeug.utils import secure_filename
 from functools import wraps
 from config import get_db
@@ -21,6 +22,14 @@ app.config["JWT_SECRET_KEY"] = "change-this-to-something-random-in-production"
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 jwt = JWTManager(app)
+
+
+@jwt.expired_token_loader
+def handle_expired_token(jwt_header, jwt_payload):
+    # The frontend's Axios interceptor only tries to refresh when it sees this
+    # exact code. Other 401s (wrong password on login, wrong current password
+    # when changing it) are real answers and must NOT trigger a token refresh.
+    return jsonify({"error": "Token expired", "code": "token_expired"}), 401
 
 # the frontend sends the token in an Authorization header now, not a cookie,
 # so no credentials/cookies need to cross origins anymore - but the browser's
@@ -131,7 +140,7 @@ def register():
         return jsonify({
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "user": {"id": user_id, "name": name, "email": email, "role": "customer"},
+            "user": {"id": user_id, "name": name, "email": email, "role": "customer", "avatar_url": None},
         }), 201
     finally:
         cur.close()
@@ -165,6 +174,7 @@ def login():
             "user": {
                 "id": user["id"], "name": user["name"],
                 "email": user["email"], "role": user["role"],
+                "avatar_url": user.get("avatar_url"),
             },
         })
     finally:
@@ -202,16 +212,150 @@ def logout():
     return jsonify({"message": "Logged out"})
 
 
+def profile_payload(row):
+    """Shapes a users row into the profile JSON the frontend expects."""
+    created = row.get("created_at")
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "email": row["email"],
+        "role": row["role"],
+        "avatar_url": row.get("avatar_url"),  # None -> JSON null -> frontend shows initials
+        "created_at": created.strftime("%Y-%m-%d") if created else None,
+    }
+
+
 @app.route("/api/me", methods=["GET"])
 @jwt_required()
 def me():
     user_id = get_jwt_identity()
-    claims = get_jwt()
-    return jsonify({
-        "id": int(user_id),
-        "name": claims.get("name"),
-        "role": claims.get("role"),
-    })
+
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "SELECT id, name, email, role, avatar_url, created_at FROM users WHERE id = %s",
+            (user_id,),
+        )
+        user = cur.fetchone()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        return jsonify(profile_payload(user))
+    finally:
+        cur.close()
+        db.close()
+
+
+@app.route("/api/me", methods=["PUT"])
+@jwt_required()
+def update_profile():
+    user_id = get_jwt_identity()
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    # lowercased to match register/login, which both look emails up in lowercase -
+    # otherwise saving "Ravi@Example.com" here would make login fail afterwards
+    email = (data.get("email") or "").strip().lower()
+
+    if not name or not email:
+        return jsonify({"error": "Name and email required"}), 400
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        return jsonify({"error": "Enter a valid email address"}), 400
+
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "UPDATE users SET name = %s, email = %s WHERE id = %s",
+            (name, email, user_id),
+        )
+        db.commit()
+        return jsonify({"message": "Profile updated", "name": name, "email": email}), 200
+    except mysql.connector.IntegrityError:
+        db.rollback()
+        return jsonify({"error": "Email already in use"}), 409
+    finally:
+        cur.close()
+        db.close()
+
+
+@app.route("/api/me/password", methods=["PUT"])
+@jwt_required()
+def change_password():
+    user_id = get_jwt_identity()
+    data = request.get_json() or {}
+    current = data.get("current_password") or ""
+    new_pass = data.get("new_password") or ""
+    confirm = data.get("confirm_password") or ""
+
+    if not current:
+        return jsonify({"error": "Current password is required"}), 400
+    if new_pass != confirm:
+        return jsonify({"error": "Passwords do not match"}), 400
+    if len(new_pass) < 6:
+        return jsonify({"error": "Min 6 characters"}), 400
+
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT password FROM users WHERE id = %s", (user_id,))
+        user = cur.fetchone()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        if not bcrypt.check_password_hash(user["password"], current):
+            return jsonify({"error": "Current password incorrect"}), 401
+
+        hashed = bcrypt.generate_password_hash(new_pass).decode("utf-8")
+        cur.execute("UPDATE users SET password = %s WHERE id = %s", (hashed, user_id))
+        db.commit()
+        return jsonify({"message": "Password changed"}), 200
+    finally:
+        cur.close()
+        db.close()
+
+
+@app.route("/api/me/avatar", methods=["PUT"])
+@jwt_required()
+def update_avatar():
+    """Uploads a new profile picture and saves it on the user in one step."""
+    user_id = get_jwt_identity()
+
+    if "image" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, webp"}), 400
+
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    new_url = None
+    try:
+        cur.execute("SELECT avatar_url FROM users WHERE id = %s", (user_id,))
+        user = cur.fetchone()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        old_url = user["avatar_url"]
+
+        ext = file.filename.rsplit(".", 1)[-1].lower()
+        safe_name = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+        file.save(os.path.join(app.config["UPLOAD_FOLDER"], safe_name))
+        new_url = f"/static/uploads/{safe_name}"
+
+        cur.execute("UPDATE users SET avatar_url = %s WHERE id = %s", (new_url, user_id))
+        db.commit()
+
+        # only after the DB points at the new file is it safe to remove the old one
+        delete_uploaded_file(old_url)
+        return jsonify({"avatar_url": new_url}), 200
+    except Exception as e:
+        db.rollback()
+        delete_uploaded_file(new_url)  # don't leave an orphaned file behind
+        return jsonify({"error": "Could not update profile picture", "detail": str(e)}), 500
+    finally:
+        cur.close()
+        db.close()
 
 
 # ------------------------------------------------------------------

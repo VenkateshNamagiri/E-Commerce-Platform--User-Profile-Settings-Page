@@ -1,92 +1,106 @@
-1. What is a CSS custom property?
+1. How does your Navbar update immediately after a name or avatar change without a page refresh? 
+Explain which React concept makes this possible.
 
-A CSS custom property is a reusable value stored in CSS. It is usually used for colors, spacing, or other design values. Custom properties start with two hyphens and are used with `var()`.
+The React concept is shared state through AuthContext.
 
-A hardcoded color is written directly in a CSS rule. If the color needs to change, every rule using that color must be edited separately. With a custom property, I can change the value in one place.
+The flow is:
 
-Example from my code:
+AuthContext stores the currently logged-in user's information, such as name and avatar_url.
 
-css
-:root {
-    --primary: #29614c;
-    --surface: rgba(255, 255, 255, 0.82);
-}
+Navbar reads that user information from AuthContext.
 
-:root[data-theme='dark'] {
-    --primary: #78c7a5;
-    --surface: rgba(28, 43, 36, 0.88);
-}
+When the profile page successfully updates the name/avatar, it calls updateUser().
 
-.card {
-    background: var(--surface);
-}
+updateUser() updates the user state inside AuthContext.
 
-The card automatically uses the correct background when the theme changes.
+Because React re-renders components when their state/context changes, the Navbar automatically receives the new data and re-renders.
 
+So, there is no need to refresh the page.
 
+In simple terms:
 
+ProfilePage
+    ↓
+updateUser()
+    ↓
+AuthContext user state changes
+    ↓
+React re-renders components using that context
+    ↓
+Navbar shows new name/avatar
 
- 2. How does the app detect the system theme on the first visit?
-
-The app first looks for a saved theme in localStorage. If there is no saved theme, it checks the user's system preference with matchMedia.
-
-The exact code is:
-
-javascript
-function getSystemTheme() {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
-}
-
-function getInitialTheme() {
-    const savedTheme = localStorage.getItem('theme')
-    return THEMES.includes(savedTheme) ? savedTheme : getSystemTheme()
-}
-
-The app also listens for system theme changes when the user has not manually saved a theme:
-
-javascript
-const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-
-const handleSystemThemeChange = event => {
-    setTheme(event.matches ? 'dark' : 'light')
-}
-
-mediaQuery.addEventListener('change', handleSystemThemeChange)
+The key concept is React Context + state updates + re-rendering.
 
 
+2.Why do you verify the current password before allowing a change? What security risk does skipping this step create?
+
+You verify the current password to make sure that the person requesting the password change actually knows the existing password.
+
+For example, suppose someone gets access to a user's logged-in session or token. Without checking the current password, they could potentially do:
+
+PUT /api/me/password
+        ↓
+Set a new password
+        ↓
+Original user can no longer log in
+
+That creates a serious account takeover/security risk.
+
+The current-password check adds another authentication factor for this sensitive operation:
+
+if not bcrypt.check_password_hash(
+    user['password'], current
+):
+    return jsonify({
+        "error": "Current password incorrect"
+    }), 401
+
+So even if someone has the user's authenticated session, they still need to know the existing password to change it.
+
+3.Your password change route returns 401 for wrong current password. Why 401 and not 400?
+
+401 Unauthorized is appropriate because the request failed an authentication/credential check.
+
+The distinction is:
+
+400 Bad Request → The request itself is invalid, such as missing data or passwords not matching.
+
+new_password != confirm_password
+→ 400
+
+401 Unauthorized → The supplied authentication credentials are invalid.
+
+current_password is incorrect
+→ 401
+
+In this task, the user's current password is being used to verify their identity before performing a sensitive operation. Therefore, a wrong current password is treated as an authentication failure.
 
 
+4. What is the purpose of the updateUser function you added to AuthContext?
 
- 3. Why use data-theme on the root element?
+updateUser provides a central way to update the logged-in user's information throughout the React application.
 
-The app puts the selected theme on the root HTML element:
+For example, after changing the name:
 
-javascript
-document.documentElement.setAttribute('data-theme', theme)
+updateUser({
+  name: "Ravi Kumar",
+  email: "ravi@example.com"
+});
 
-This is useful because all components can use the same CSS variables. I do not need to pass a theme prop through the Navbar, product cards, forms, cart, checkout, and dashboard.
+Or after uploading an avatar:
 
-Passing a theme prop to every component would make the code repetitive and harder to maintain. Changing one attribute on the root element updates the whole application through CSS.
+updateUser({
+  avatar_url: "/static/uploads/new-avatar.jpg"
+});
 
+Because the user data is stored in AuthContext, components such as:
 
+Navbar
 
+ProfilePage
 
- 4. What does localStorage.getItem('theme') do?
+other authenticated components
 
-javascript
-const savedTheme = localStorage.getItem('theme')
+can immediately see the updated information.
 
-
-This reads the theme preference saved in the browser. The saved theme takes priority over the system preference because it represents the user's direct choice.
-
-For example, the computer might be set to dark mode, but the user might choose light mode in the application. The app should remember that choice instead of changing it back to dark mode.
-
-The priority order is:
-
-1. Use the saved theme if one exists.
-2. Otherwise use the system preference.
-3. Use light mode if the system preference is light.
-
-This is why the selected theme remains the same after refreshing the page.
+Without updateUser, you might update the database successfully but still have the old user information in React state until the page is refreshed or the user logs in again.

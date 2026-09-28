@@ -111,14 +111,53 @@
   --tint-danger-bg: #3a1a1c;
 }
 
+/* Sepia - warm, low-glare reading theme (third theme, no OS equivalent) */
+:root[data-theme='sepia'] {
+  --bg-primary: #f4ecd8;
+  --bg-secondary: #ece0c4;
+  --text-primary: #4b3621;
+  --text-secondary: #8a7355;
+  --border-color: #ddcda3;
+  --card-bg: #faf3e0;
+  --input-bg: #fbf6ea;
+  --shadow: 0 2px 8px rgba(75,54,33,0.12);
+  --btn-secondary-bg: #ece0c4;
+  --btn-secondary-bg-hover: #e0d1a8;
+  --table-header-bg: #ecdfb8;
+  --table-header-text: #6b4a1e;
+  --dropzone-bg: #efe4c8;
+  --dropzone-bg-active: #e6dcb8;
+  --progress-track-bg: #e0d1a8;
+  --no-image-bg: #ece0c4;
+  --cart-summary-bg: linear-gradient(90deg, #efe0bd, #f2d9c8);
+  --tint-success-bg: #e3ecd0;
+  --tint-success-text: #3f6b2e;
+  --tint-success-border: #c9d9ac;
+  --tint-warning-bg: #f2e2bd;
+  --tint-warning-text: #8a5a12;
+  --tint-info-bg: #dee6ec;
+  --tint-info-text: #345a75;
+  --tint-purple-bg: #e6dcec;
+  --tint-purple-text: #5c4a75;
+  --tint-danger-bg: #f2ddd3;
+}
+
 * { box-sizing: border-box; }
+
+/* Smooth theme switch: color-related properties animate instead of
+   snapping instantly. Scoped to color-ish properties only (not `all`) so
+   it never fights unrelated transitions like button hover/press effects -
+   an element with its own `transition` (e.g. .btn) simply overrides this
+   for the properties it names. */
+*, *::before, *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
 
 body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
-  transition: background 0.2s ease, color 0.2s ease;
 }
 
 a { color: var(--accent-dark); text-decoration: none; font-weight: 500; }
@@ -559,4 +598,72 @@ input:focus, select:focus, textarea:focus {
   font-weight: 600;
   width: 100%;
   height: 100%;
+}
+
+/* ---------- Avatar (photo or initials circle) ---------- */
+.avatar { border-radius: 50%; object-fit: cover; flex-shrink: 0; display: block; }
+.avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--btn-primary);
+  color: var(--btn-text);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+.navbar-profile { display: flex; align-items: center; gap: 8px; }
+.navbar-profile .avatar { border: 2px solid rgba(255,255,255,0.85); }
+
+/* ---------- Profile page ---------- */
+.profile-sections { display: flex; flex-direction: column; gap: 22px; max-width: 560px; }
+.profile-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+}
+.profile-card h2 { margin: 0 0 16px; font-size: 1.1rem; }
+.avatar-section { display: flex; align-items: center; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
+.avatar-info { display: flex; flex-direction: column; gap: 3px; }
+.profile-meta { color: var(--text-secondary); font-size: 0.85rem; }
+.avatar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.form-field { margin-bottom: 14px; }
+.form-field label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+.form-field input { width: 100%; }
+.form-field input.input-error { border-color: var(--danger); }
+.field-error { color: var(--danger); font-size: 0.82rem; font-weight: 600; margin: 5px 0 0; }
+
+/* ---------- Toasts ---------- */
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+.toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  animation: toast-in 0.25s ease;
+}
+.toast-success { background: var(--tint-success-bg); color: var(--tint-success-text); border-color: var(--tint-success-border); }
+.toast-error { background: var(--tint-danger-bg); color: var(--danger); border-color: var(--danger); }
+.toast-close { background: none; border: none; color: inherit; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 2px; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

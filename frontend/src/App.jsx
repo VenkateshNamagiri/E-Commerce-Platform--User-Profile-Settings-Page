@@ -9,6 +9,7 @@ import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import Orders from './pages/Orders'
 import Wishlist from './pages/Wishlist'
+import ProfilePage from './pages/ProfilePage'
 import Login from './pages/Login'
 import Register from './pages/Register'
 
@@ -40,6 +41,9 @@ export default function App() {
           } />
           <Route path="/wishlist" element={
             <ProtectedRoute><Wishlist /></ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute><ProfilePage /></ProtectedRoute>
           } />
 
           {/* Admin only */}
